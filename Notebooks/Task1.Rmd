@@ -1,0 +1,279 @@
+---
+title: "task1"
+author: "Anh Dinh"
+date: "2025-06-26"
+output: html_document
+---
+
+# 1. Install and Loading Packages
+
+```{r}
+library(tidyverse)
+library(readr)
+library(imputeTS)
+library(naniar)
+library(dplyr)
+library(Hmisc)
+library(skimr)
+library(VIM)
+library(recipes)
+library(knitr)
+library(ggplot2)
+library(scales)
+library(stringr)
+```
+
+# 2. Prepair and cleaning data
+
+## 2.1 Read and Understand the data
+
+```{r}
+raw <- read_csv("../data/Web Analytic_Dataset.csv")
+head(raw)
+```
+
+## 2.2 The shape of data
+
+```{r}
+cat("The number of data points = ", nrow(raw), "\n")
+cat("The number of variables = ", ncol(raw))
+```
+
+## 2.3 Data type
+
+```{r}
+sapply(raw, class)
+```
+
+## 2.4 Checking null values
+
+```{r}
+colSums(is.na(raw))
+```
+
+### Conclusion about the dataset
+
+Combining eyeballing, observing and analyzing the dataset, we can conclude:
+
+1.  The dataset has 250 data points and 13 variables.
+2.  
+    -   Numerical columns: Year, Month of the year, Users, New Users, Sessions, Pageviews, Transactions, Revenue and Quantity Sold
+
+    -   Catgorical columns: Source / Medium, Bounce Rate, Conversion Rate (%)
+3.  About issues:
+
+It can be seen from the Web Analytic_Dataset.csv that the dataset has 250 data points and 13 variables. Additionally, there are 3 category columns including Source / Medium, Bounce Rate and Conversion Rate (%). About numerical columns, there are Year, Month of the year, Users, New Users, Sessions, Pageviews, Transactions, Revenue and Quantity Sold (9 columns). Therefore, the Avg. Session Duration format in time
+
+About the issues, Bounce rate col contains number in each value. So, why is the Bounce rate stored as character. As a result, we need to convert data types.
+
+# 3. Cleaning Data
+
+## 3.1 Change Data Type
+
+```{r}
+raw <- raw %>%
+  mutate(
+    `Bounce Rate` = as.numeric(str_replace_all(`Bounce Rate`, "%", "")) / 100,
+    `Avg. Session Duration` = as.numeric(`Avg. Session Duration`),
+    `Conversion Rate (%)` = as.numeric(`Conversion Rate (%)`)
+  )
+
+str(raw)
+```
+
+## 3.2 Change Data Column Name
+
+```{r}
+raw<- raw %>%
+  rename(
+    SourceMedium = `Source / Medium`,
+    NewUsers = `New Users`,
+    Month = `Month of the year`,
+    BounceRate = `Bounce Rate`,
+    AvgSessionDuration = `Avg. Session Duration`,
+    ConversionRate = `Conversion Rate (%)`,
+    QuantitySold = `Quantity Sold`
+  )
+
+str(raw)
+```
+
+# Task 1
+
+## 1.1 Task a
+
+```{r}
+# Group by Source_Medium and Year to get total revenue
+revenue_by_source <- raw %>%
+  group_by(SourceMedium, Year) %>%
+  summarise(TotalRevenue = sum(Revenue, na.rm = TRUE)) %>%
+  ungroup()
+
+# Find out the top 3 sources based on revenue
+top_3_sources <- raw %>%
+  group_by(SourceMedium) %>%
+  summarise(GrandTotalRevenue = sum(Revenue, na.rm = TRUE)) %>%
+  arrange(desc(GrandTotalRevenue)) %>%
+  slice_head(n = 3) %>%
+  pull(SourceMedium)
+
+
+# Filter the summary table for only the top 3 sources
+top_3_revenue_table <- revenue_by_source %>%
+  filter(SourceMedium %in% top_3_sources) %>%
+  pivot_wider(names_from = Year, values_from = TotalRevenue, values_fill = 0)
+
+top_3_revenue_table
+
+#Chart to visualize the top three and revenue for each year
+chart_data <- revenue_by_source %>%
+  filter(SourceMedium %in% top_3_sources)
+
+ggplot(chart_data, aes(x = factor(Year), y = TotalRevenue, fill = SourceMedium)) + 
+  geom_bar(stat = "identity",position = "dodge") + scale_fill_manual(values = c("lightgreen", "lightblue", "lightpink")) + labs( title = "Top 3 Traffic Sources by Revenue", x = "Year", y = "Revenue", fill = "Source Medium" ) + theme_minimal()
+
+```
+
+## 1.2 Task b
+
+## 1.2 Task c
+
+```{r}
+# Bounce Rate vs Conversion Rate
+ggplot(raw, aes(x = `BounceRate`, y = `ConversionRate`)) +
+  geom_point(color = "blue") +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Bounce Rate vs Conversion Rate", x = "Bounce Rate (%)", y = "Conversion Rate (%)")
+
+# Conversion Rate vs Revenue
+ggplot(raw, aes(x = `ConversionRate`, y = Revenue)) +
+  geom_point(color = "darkgreen") +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Conversion Rate vs Revenue", x = "Conversion Rate (%)", y = "Revenue")
+
+# Transactions vs Revenue
+ggplot(raw2, aes(x = Transactions, y = Revenue)) +
+  geom_point(color = "red") +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Transactions vs Revenue", x = "Transactions", y = "Revenue")
+```
+
+```{r}
+library(ggplot2)
+library(scales)
+
+# Tạo biểu đồ
+ggplot(raw, aes(x = Date)) +
+  geom_col(aes(y = Transactions), fill = "steelblue", alpha = 0.8) +
+  geom_line(aes(y = Revenue / 1000), color = "red", size = 1.2, group = 1) +
+  scale_y_continuous(
+    name = "Transactions",
+    sec.axis = sec_axis(~ . * 1000, name = "Revenue", labels = dollar)
+  ) +
+  labs(
+    title = "Transactions (bar) vs Revenue (line)",
+    x = "Date"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.y = element_text(color = "steelblue", size = 12),
+    axis.title.y.right = element_text(color = "red", size = 12),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+# Task 2
+
+```{r}
+raw2 <- read_csv("../data/diabetes.csv")
+head(raw)
+```
+
+```{r}
+cat("The number of data points = ", nrow(raw2), "\n")
+cat("The number of variables = ", ncol(raw2))
+```
+
+```{r}
+sapply(raw2, class)
+```
+
+```{r}
+colSums(is.na(raw2))
+```
+
+```{r}
+summary(raw2)
+```
+
+## 2.1 Task d
+
+```{r}
+#create function
+describe_column <- function(column) {
+  c(
+    Mean = mean(column, na.rm = TRUE),
+    Median = median(column, na.rm = TRUE),
+    SD = sd(column, na.rm = TRUE),
+    Variance = var(column, na.rm = TRUE)
+  )
+}
+```
+
+```{r}
+# Loop through each column and describe
+for (col_name in names(raw2)) {
+  cat("Statistics for column:", col_name, "\n")
+  print(describe_column(raw2[[col_name]]))
+  cat("\n")
+}
+```
+
+## 2.2 Task e
+
+```{r}
+raw2 %>% 
+  filter(raw2$BloodPressure == 0)
+```
+
+Based on the summary statistics provided in part (d), several columns in the dataset contain values that are physiologically impossible or indicate missing data. The table below outlines the columns, the errors identified, and the proposed corrections:
+
+#### **1. Glucose**
+
+-   **Error Identified**: Minimum value is `0`. A glucose level of 0 is not possible for a living person and likely indicates missing data.
+
+-   **Correction**: Replace all `0` values in this column with `NA` to signify missing data. Later, these missing values can be handled using imputation methods such as replacing with the median or using model-based imputation.
+
+#### **2. BloodPressure**
+
+-   **Error Identified**: Minimum value is `0`. A blood pressure of 0 is not realistic and suggests missing data.
+
+-   **Correction**: Convert all `0` values to `NA`. Then, impute the missing values using the median or a more advanced method like multiple imputation depending on the dataset size and analysis goals.
+
+#### **3. SkinThickness**
+
+-   **Error Identified**: Contains `0` values, which are unlikely in practice. Skin thickness (triceps skinfold) should always have a positive value if measured.
+
+-   **Correction**: Treat all `0` values as missing (`NA`). Afterward, impute using the median or build a predictive model using related variables such as BMI and age.
+
+#### **4. Insulin**
+
+-   **Error Identified**: Minimum value is `0`. While it is theoretically possible to have low insulin, a value of 0 usually reflects unmeasured or missing data in this context.
+
+-   **Correction**: Replace `0` with `NA` and impute with median, mean, or predictive modeling. Due to the high number of zeros, advanced imputation such as KNN or MICE is recommended to avoid bias.
+
+#### **5. BMI**
+
+-   **Error Identified**: Minimum value is `0`. A BMI of 0 is biologically impossible and represents missing or invalid data.
+
+-   **Correction**: Convert `0` to `NA` and impute using the median BMI or a regression model using Age and Pregnancies as predictors.
+
+#### **6. Pregnancies, Age, DiabetesPedigreeFunction, Outcome**
+
+-   **Errors Identified**: No errors detected based on summary statistics. Minimum and maximum values are reasonable and consistent with expected ranges.
+
+-   **Correction**: No correction needed.
+
+### **Conclusion**:
+
+Correcting these errors ensures the dataset reflects realistic values and improves the quality of any analysis or machine learning model. Treating these values properly also helps avoid misleading results caused by inappropriate or missing data.
